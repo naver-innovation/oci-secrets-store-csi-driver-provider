@@ -53,10 +53,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_REPO_NAME }}:${{ env.IMAGE_TAG }}-amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           provenance: false
-          sbom: false
+          sbom: true
 
   build-arm64:
     needs: [unit-tests]
@@ -84,10 +82,8 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: ${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_REPO_NAME }}:${{ env.IMAGE_TAG }}-arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           provenance: false
-          sbom: false
+          sbom: true
 
   create-manifest:
     needs: [build-amd64, build-arm64]
