@@ -5,8 +5,15 @@ on:
     # Build and publish artifacts for a release
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      IMAGE_TAG:
+        description: "Image tag to build and push"
+        required: true
 
 jobs:
   build:
     uses: ./.github/workflows/build-n-push.yaml
+    with:
+      IMAGE_TAG: ${{ github.event.inputs.IMAGE_TAG || github.ref_name }}
     secrets: inherit
