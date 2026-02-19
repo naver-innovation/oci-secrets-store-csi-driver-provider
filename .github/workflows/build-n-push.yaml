@@ -54,7 +54,7 @@ jobs:
           push: true
           tags: ${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_REPO_NAME }}:${{ env.IMAGE_TAG }}-amd64
           provenance: false
-          sbom: true
+          sbom: false
 
   build-arm64:
     needs: [unit-tests]
@@ -83,7 +83,7 @@ jobs:
           push: true
           tags: ${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_REPO_NAME }}:${{ env.IMAGE_TAG }}-arm64
           provenance: false
-          sbom: true
+          sbom: false
 
   create-manifest:
     needs: [build-amd64, build-arm64]
