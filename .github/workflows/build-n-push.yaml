@@ -2,6 +2,11 @@ name: BuildnPush
 
 on:
   workflow_call:
+    inputs:
+      IMAGE_TAG:
+        required: false
+        type: string
+        default: ${{ github.ref_name }}
     secrets:
       IMAGE_REGISTRY:
         required: true
@@ -16,7 +21,7 @@ on:
 
 env:
   IMAGE_REPO_NAME: oci-secrets-store-csi-driver-provider
-  IMAGE_TAG: ${{ github.ref_name }}
+  IMAGE_TAG: ${{ inputs.IMAGE_TAG }}
 
 jobs:
   unit-tests:
