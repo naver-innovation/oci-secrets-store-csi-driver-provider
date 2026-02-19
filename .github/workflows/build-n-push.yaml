@@ -2,48 +2,115 @@ name: BuildnPush
 
 on:
   workflow_call:
-    inputs:
+    secrets:
       IMAGE_REGISTRY:
         required: true
-        type: string 
+      REGISTRY_USERNAME:
+        required: true
+      REGISTRY_PASSWORD:
+        required: true
     outputs:
       IMAGE_PATH:
         description: "Image Path"
-        value: ${{ jobs.image-build-n-push.outputs.IMAGE_PATH }}
+        value: ${{ jobs.create-manifest.outputs.IMAGE_PATH }}
+
+env:
+  IMAGE_REPO_NAME: oci-secrets-store-csi-driver-provider
+  IMAGE_TAG: ${{ github.ref_name }}
 
 jobs:
   unit-tests:
     uses: ./.github/workflows/unit-tests.yaml
-  image-build-n-push:
+
+  build-amd64:
     needs: [unit-tests]
-    runs-on: ubuntu-latest
-    name: Builds container image and pushes to registry
-    env:
-      IMAGE_REGISTRY: ${{ inputs.IMAGE_REGISTRY }}
-    outputs:
-      IMAGE_PATH: ${{ steps.print-docker-image-path.outputs.IMAGE_PATH }}
+    runs-on: arc-amd64
+    name: Build linux/amd64 image
     steps:
-
       - name: Checkout
-        uses: actions/checkout@v3.3.0
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-        with:
-          platforms: amd64
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
-      - name: Log into GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${GITHUB_ACTOR,,} --password-stdin
+      - name: Log into registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.IMAGE_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Build Image
-        run: IMAGE_REGISTRY="${{ env.IMAGE_REGISTRY }}" make docker-build
+      - name: Build and push amd64 image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: build/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_REPO_NAME }}:${{ env.IMAGE_TAG }}-amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
 
-      - name: Push Image
-        run: IMAGE_REGISTRY="${{ env.IMAGE_REGISTRY }}" make docker-push
+  build-arm64:
+    needs: [unit-tests]
+    runs-on: arc-arm64
+    name: Build linux/arm64 image
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Print Image Path
-        id: print-docker-image-path
-        run: echo IMAGE_PATH=`IMAGE_REGISTRY="${{ env.IMAGE_REGISTRY }}" make print-docker-image-path` >> $GITHUB_OUTPUT
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log into registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.IMAGE_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push arm64 image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: build/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_REPO_NAME }}:${{ env.IMAGE_TAG }}-arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+  create-manifest:
+    needs: [build-amd64, build-arm64]
+    runs-on: arc-arm64
+    name: Create and push multi-arch manifest
+    outputs:
+      IMAGE_PATH: ${{ steps.set-image-path.outputs.IMAGE_PATH }}
+    steps:
+      - name: Log into registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.IMAGE_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create and push multi-arch manifest
+        run: |
+          IMAGE_BASE="${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_REPO_NAME }}"
+          docker buildx imagetools create \
+            --tag "${IMAGE_BASE}:${{ env.IMAGE_TAG }}" \
+            --tag "${IMAGE_BASE}:latest" \
+            "${IMAGE_BASE}:${{ env.IMAGE_TAG }}-amd64" \
+            "${IMAGE_BASE}:${{ env.IMAGE_TAG }}-arm64"
+
+      - name: Set IMAGE_PATH output
+        id: set-image-path
+        run: |
+          echo "IMAGE_PATH=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_REPO_NAME }}:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
