@@ -9,6 +9,8 @@ FROM golang:1.24-alpine as build
 
 ENV CGO_ENABLED=0
 
+RUN apk add --no-cache make
+
 WORKDIR /provider-src
 
 # Copy provider sources
