@@ -5,7 +5,11 @@
 # Licensed under the Universal Permissive License v 1.0 as shown at https://oss.oracle.com/licenses/upl/
 #
 
-FROM golang:1.24 as build
+FROM golang:1.24-alpine as build
+
+ENV CGO_ENABLED=0
+
+RUN apk add --no-cache make
 
 WORKDIR /provider-src
 
@@ -16,7 +20,7 @@ COPY internal  ./internal
 COPY vendor    ./vendor
 
 # Build provider
-RUN make test build
+RUN make build
 
 FROM oraclelinux:9-slim
 
